@@ -1,14 +1,16 @@
 /*
- *  arch/arm/include/asm/thread_info.h
+ * linux/arch/unicore32/include/asm/thread_info.h
  *
- *  Copyright (C) 2002 Russell King.
+ * Code specific to PKUnity SoC and UniCore ISA
+ *
+ * Copyright (C) 2001-2010 GUAN Xue-tao
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#ifndef __ASM_ARM_THREAD_INFO_H
-#define __ASM_ARM_THREAD_INFO_H
+#ifndef __UNICORE_THREAD_INFO_H__
+#define __UNICORE_THREAD_INFO_H__
 
 #ifdef __KERNEL__
 
@@ -25,9 +27,10 @@ struct task_struct;
 struct exec_domain;
 
 #include <asm/types.h>
-#include <asm/domain.h>
 
-typedef unsigned long mm_segment_t;
+typedef struct {
+	unsigned long seg;
+} mm_segment_t;
 
 struct cpu_context_save {
 	__u32	r4;
@@ -36,11 +39,26 @@ struct cpu_context_save {
 	__u32	r7;
 	__u32	r8;
 	__u32	r9;
-	__u32	sl;
+	__u32	r10;
+	__u32	r11;
+	__u32	r12;
+	__u32	r13;
+	__u32	r14;
+	__u32	r15;
+	__u32	r16;
+	__u32	r17;
+	__u32	r18;
+	__u32	r19;
+	__u32	r20;
+	__u32	r21;
+	__u32	r22;
+	__u32	r23;
+	__u32	r24;
+	__u32	r25;
+	__u32	r26;
 	__u32	fp;
 	__u32	sp;
 	__u32	pc;
-	__u32	extra[2];		/* Xscale 'acc' register, etc */
 };
 
 /*
@@ -49,21 +67,17 @@ struct cpu_context_save {
  */
 struct thread_info {
 	unsigned long		flags;		/* low level flags */
-	int			preempt_count;	/* 0 => preemptable, <0 => bug */
+	int			preempt_count;	/* 0 => preemptable */
+						/* <0 => bug */
 	mm_segment_t		addr_limit;	/* address limit */
 	struct task_struct	*task;		/* main task structure */
 	struct exec_domain	*exec_domain;	/* execution domain */
 	__u32			cpu;		/* cpu */
-	__u32			cpu_domain;	/* cpu domain */
 	struct cpu_context_save	cpu_context;	/* cpu context */
 	__u32			syscall;	/* syscall number */
 	__u8			used_cp[16];	/* thread used copro */
-	unsigned long		tp_value;
-	struct crunch_state	crunchstate;
-	union fp_state		fpstate __attribute__((aligned(8)));
-	union vfp_state		vfpstate;
-#ifdef CONFIG_ARM_THUMBEE
-	unsigned long		thumbee_state;	/* ThumbEE Handler Base register */
+#ifdef CONFIG_UNICORE_FPU_F64
+	struct fp_state		fpstate __attribute__((aligned(8)));
 #endif
 	struct restart_block	restart_block;
 };
@@ -75,9 +89,6 @@ struct thread_info {
 	.flags		= 0,						\
 	.preempt_count	= INIT_PREEMPT_COUNT,				\
 	.addr_limit	= KERNEL_DS,					\
-	.cpu_domain	= domain_val(DOMAIN_USER, DOMAIN_MANAGER) |	\
-			  domain_val(DOMAIN_KERNEL, DOMAIN_MANAGER) |	\
-			  domain_val(DOMAIN_IO, DOMAIN_CLIENT),		\
 	.restart_block	= {						\
 		.fn	= do_no_restart_syscall,			\
 	},								\
@@ -104,20 +115,6 @@ static inline struct thread_info *current_thread_info(void)
 #define thread_saved_fp(tsk)	\
 	((unsigned long)(task_thread_info(tsk)->cpu_context.fp))
 
-extern void crunch_task_disable(struct thread_info *);
-extern void crunch_task_copy(struct thread_info *, void *);
-extern void crunch_task_restore(struct thread_info *, void *);
-extern void crunch_task_release(struct thread_info *);
-
-extern void iwmmxt_task_disable(struct thread_info *);
-extern void iwmmxt_task_copy(struct thread_info *, void *);
-extern void iwmmxt_task_restore(struct thread_info *, void *);
-extern void iwmmxt_task_release(struct thread_info *);
-extern void iwmmxt_task_switch(struct thread_info *);
-
-extern void vfp_sync_hwstate(struct thread_info *);
-extern void vfp_flush_hwstate(struct thread_info *);
-
 #endif
 
 /*
@@ -129,40 +126,27 @@ extern void vfp_flush_hwstate(struct thread_info *);
 /*
  * thread information flags:
  *  TIF_SYSCALL_TRACE	- syscall trace active
- *  TIF_SYSCAL_AUDIT	- syscall auditing active
  *  TIF_SIGPENDING	- signal pending
  *  TIF_NEED_RESCHED	- rescheduling necessary
  *  TIF_NOTIFY_RESUME	- callback before returning to user
- *  TIF_USEDFPU		- FPU was used by this task this quantum (SMP)
- *  TIF_POLLING_NRFLAG	- true if poll_idle() is polling TIF_NEED_RESCHED
  */
 #define TIF_SIGPENDING		0
 #define TIF_NEED_RESCHED	1
 #define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
 #define TIF_SYSCALL_TRACE	8
-#define TIF_SYSCALL_AUDIT	9
-#define TIF_POLLING_NRFLAG	16
-#define TIF_USING_IWMMXT	17
-#define TIF_MEMDIE		18	/* is terminating due to OOM killer */
+#define TIF_MEMDIE		18
 #define TIF_RESTORE_SIGMASK	20
-#define TIF_SECCOMP		21
 
 #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
 #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
 #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
-#define _TIF_SYSCALL_AUDIT	(1 << TIF_SYSCALL_AUDIT)
-#define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
-#define _TIF_USING_IWMMXT	(1 << TIF_USING_IWMMXT)
 #define _TIF_RESTORE_SIGMASK	(1 << TIF_RESTORE_SIGMASK)
-#define _TIF_SECCOMP		(1 << TIF_SECCOMP)
 
-/* Checks for any syscall work in entry-common.S */
-#define _TIF_SYSCALL_WORK (_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT)
 /*
  * Change these and you break ASM code in entry-common.S
  */
 #define _TIF_WORK_MASK		0x000000ff
 
 #endif /* __KERNEL__ */
-#endif /* __ASM_ARM_THREAD_INFO_H */
+#endif /* __UNICORE_THREAD_INFO_H__ */
