@@ -184,6 +184,34 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
 					 .len = IEEE80211_MAX_DATA_LEN },
 	[NL80211_ATTR_ROAM_SUPPORT] = { .type = NLA_FLAG },
 	[NL80211_ATTR_SCHED_SCAN_MATCH] = { .type = NLA_NESTED },
+	[NL80211_ATTR_TX_NO_CCK_RATE] = { .type = NLA_FLAG },
+	[NL80211_ATTR_TDLS_ACTION] = { .type = NLA_U8 },
+	[NL80211_ATTR_TDLS_DIALOG_TOKEN] = { .type = NLA_U8 },
+	[NL80211_ATTR_TDLS_OPERATION] = { .type = NLA_U8 },
+	[NL80211_ATTR_TDLS_SUPPORT] = { .type = NLA_FLAG },
+	[NL80211_ATTR_TDLS_EXTERNAL_SETUP] = { .type = NLA_FLAG },
+	[NL80211_ATTR_DONT_WAIT_FOR_ACK] = { .type = NLA_FLAG },
+	[NL80211_ATTR_PROBE_RESP] = { .type = NLA_BINARY,
+				      .len = IEEE80211_MAX_DATA_LEN },
+	[NL80211_ATTR_DFS_REGION] = { .type = NLA_U8 },
+	[NL80211_ATTR_DISABLE_HT] = { .type = NLA_FLAG },
+	[NL80211_ATTR_HT_CAPABILITY_MASK] = {
+		.len = NL80211_HT_CAPABILITY_LEN
+	},
+	[NL80211_ATTR_NOACK_MAP] = { .type = NLA_U16 },
+	[NL80211_ATTR_INACTIVITY_TIMEOUT] = { .type = NLA_U16 },
+	[NL80211_ATTR_BG_SCAN_PERIOD] = { .type = NLA_U16 },
+	[NL80211_ATTR_WDEV] = { .type = NLA_U64 },
+	[NL80211_ATTR_USER_REG_HINT_TYPE] = { .type = NLA_U32 },
+	[NL80211_ATTR_SAE_DATA] = { .type = NLA_BINARY, },
+	[NL80211_ATTR_VHT_CAPABILITY] = { .len = NL80211_VHT_CAPABILITY_LEN },
+	[NL80211_ATTR_SCAN_FLAGS] = { .type = NLA_U32 },
+	[NL80211_ATTR_P2P_CTWINDOW] = { .type = NLA_U8 },
+	[NL80211_ATTR_P2P_OPPPS] = { .type = NLA_U8 },
+	[NL80211_ATTR_ACL_POLICY] = {. type = NLA_U32 },
+	[NL80211_ATTR_MAC_ADDRS] = { .type = NLA_NESTED },
+	[NL80211_ATTR_STA_CAPABILITY] = { .type = NLA_U16 },
+	[NL80211_ATTR_STA_EXT_CAPABILITY] = { .type = NLA_BINARY, },
 };
 
 /* policy for the key attributes */
@@ -2390,6 +2418,19 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
 			nla_len(info->attrs[NL80211_ATTR_STA_SUPPORTED_RATES]);
 	}
 
+	if (info->attrs[NL80211_ATTR_STA_CAPABILITY]) {
+		params.capability =
+			nla_get_u16(info->attrs[NL80211_ATTR_STA_CAPABILITY]);
+		params.sta_modify_mask |= STATION_PARAM_APPLY_CAPABILITY;
+	}
+
+	if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]) {
+		params.ext_capab =
+			nla_data(info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]);
+		params.ext_capab_len =
+			nla_len(info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]);
+	}
+
 	if (info->attrs[NL80211_ATTR_STA_LISTEN_INTERVAL])
 		params.listen_interval =
 		    nla_get_u16(info->attrs[NL80211_ATTR_STA_LISTEN_INTERVAL]);
@@ -2422,7 +2463,35 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
 	case NL80211_IFTYPE_P2P_GO:
 		/* disallow mesh-specific things */
 		if (params.plink_action)
-			err = -EINVAL;
+			return -EINVAL;
+
+		/* TDLS can't be set, ... */
+		if (params.sta_flags_set & BIT(NL80211_STA_FLAG_TDLS_PEER))
+			return -EINVAL;
+		/*
+		 * ... but don't bother the driver with it. This works around
+		 * a hostapd/wpa_supplicant issue -- it always includes the
+		 * TLDS_PEER flag in the mask even for AP mode.
+		 */
+		params.sta_flags_mask &= ~BIT(NL80211_STA_FLAG_TDLS_PEER);
+
+		/* accept only the listed bits */
+		if (params.sta_flags_mask &
+				~(BIT(NL80211_STA_FLAG_AUTHORIZED) |
+				  BIT(NL80211_STA_FLAG_SHORT_PREAMBLE) |
+				  BIT(NL80211_STA_FLAG_WME) |
+				  BIT(NL80211_STA_FLAG_MFP)))
+			return -EINVAL;
+
+		if (info->attrs[NL80211_ATTR_STA_CAPABILITY])
+			return -EINVAL;
+		if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY])
+			return -EINVAL;
+
+		/* must be last in here for error handling */
+		params.vlan = get_vlan(info, rdev);
+		if (IS_ERR(params.vlan))
+			return PTR_ERR(params.vlan);
 		break;
 	case NL80211_IFTYPE_P2P_CLIENT:
 	case NL80211_IFTYPE_STATION:
@@ -2447,7 +2516,15 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
 		if (params.ht_capa)
 			err = -EINVAL;
 		if (params.listen_interval >= 0)
-			err = -EINVAL;
+			return -EINVAL;
+		if (info->attrs[NL80211_ATTR_STA_CAPABILITY])
+			return -EINVAL;
+		if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY])
+			return -EINVAL;
+		/*
+		 * No special handling for TDLS here -- the userspace
+		 * mesh code doesn't have this bug.
+		 */
 		if (params.sta_flags_mask &
 				~(BIT(NL80211_STA_FLAG_AUTHENTICATED) |
 				  BIT(NL80211_STA_FLAG_MFP) |
@@ -2508,6 +2585,19 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
 	params.aid = nla_get_u16(info->attrs[NL80211_ATTR_STA_AID]);
 	if (!params.aid || params.aid > IEEE80211_MAX_AID)
 		return -EINVAL;
+
+	if (info->attrs[NL80211_ATTR_STA_CAPABILITY]) {
+		params.capability =
+			nla_get_u16(info->attrs[NL80211_ATTR_STA_CAPABILITY]);
+		params.sta_modify_mask |= STATION_PARAM_APPLY_CAPABILITY;
+	}
+
+	if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]) {
+		params.ext_capab =
+			nla_data(info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]);
+		params.ext_capab_len =
+			nla_len(info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY]);
+	}
 
 	if (info->attrs[NL80211_ATTR_HT_CAPABILITY])
 		params.ht_capa =
