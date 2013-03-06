@@ -2716,6 +2716,30 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
 	if (!rdev->ops->add_station) {
 		err = -EOPNOTSUPP;
 		goto out;
+		/* must be last in here for error handling */
+		params.vlan = get_vlan(info, rdev);
+		if (IS_ERR(params.vlan))
+			return PTR_ERR(params.vlan);
+		break;
+	case NL80211_IFTYPE_MESH_POINT:
+		/* TDLS peers cannot be added */
+		if (params.sta_flags_set & BIT(NL80211_STA_FLAG_TDLS_PEER))
+			return -EINVAL;
+		break;
+	case NL80211_IFTYPE_STATION:
+	case NL80211_IFTYPE_P2P_CLIENT:
+		/* Only TDLS peers can be added */
+		if (!(params.sta_flags_set & BIT(NL80211_STA_FLAG_TDLS_PEER)))
+			return -EINVAL;
+		/* Can only add if TDLS ... */
+		if (!(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_TDLS))
+			return -EOPNOTSUPP;
+		/* ... with external setup is supported */
+		if (!(rdev->wiphy.flags & WIPHY_FLAG_TDLS_EXTERNAL_SETUP))
+			return -EOPNOTSUPP;
+		break;
+	default:
+		return -EOPNOTSUPP;
 	}
 
 	err = rdev->ops->add_station(&rdev->wiphy, dev, mac_addr, &params);
