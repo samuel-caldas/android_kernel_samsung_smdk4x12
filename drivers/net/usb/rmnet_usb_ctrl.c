@@ -268,7 +268,6 @@ static void notification_available_cb(struct urb *urb)
 
 	switch (urb->status) {
 	case 0:
-		pr_info("[NACB:%d]<\n", iface_num);
 		/*success*/
 		break;
 
@@ -310,8 +309,7 @@ static void notification_available_cb(struct urb *urb)
 			dev_err(dev->devicep,
 			"%s: Error submitting Read URB %d\n", __func__, status);
 			goto resubmit_int_urb;
-		} else
-			pr_info("[NRA:%d]>\n", iface_num);
+		}
 		usb_mark_last_busy(udev);
 
 		if (!dev->resp_available) {
@@ -356,7 +354,6 @@ static void resp_avail_cb(struct urb *urb)
 	case 0:
 		/*success*/
 		dev->get_encap_resp_cnt++;
-		pr_info("[RACB:%d]<\n", iface_num);
 		break;
 
 	/*do not resubmit*/
@@ -417,7 +414,6 @@ resubmit_int_urb:
 	if (status)
 		dev_err(dev->devicep, "%s: Error re-submitting Int URB %d\n",
 			__func__, status);
-	pr_info("[CHKRA:%d]>\n", iface_num);
 	usb_mark_last_busy(udev);
 }
 
@@ -434,8 +430,6 @@ static int rmnet_usb_ctrl_start_rx(struct rmnet_ctrl_dev *dev)
 	retval = usb_submit_urb(dev->inturb, GFP_KERNEL);
 	if (retval < 0)
 		dev_err(dev->devicep, "%s Intr submit %d\n", __func__, retval);
-	else
-		pr_info("[CHKRA:%d]>\n", iface_num);
 
 	return retval;
 }
@@ -676,8 +670,6 @@ static int rmnet_usb_ctrl_write(struct rmnet_ctrl_dev *dev, char *buf,
 	}
 	usb_mark_last_busy(udev);
 
-	DUMP_BUFFER("Write: ", size, buf);
-
 	result = usb_autopm_get_interface(dev->intf);
 	if (result < 0) {
 		dev_err(dev->devicep, "%s: Unable to resume interface: %d\n",
@@ -914,7 +906,6 @@ ctrl_read:
 	kfree(list_elem);
 	DBG("%s: Returning %d bytes to %s\n", __func__, bytes_to_read,
 			dev->name);
-	DUMP_BUFFER("Read: ", bytes_to_read, buf);
 
 	return bytes_to_read;
 }
@@ -968,8 +959,6 @@ retry_submit:
 	usb_anchor_urb(urb, &dev->tx_submitted);
 	dev->snd_encap_cmd_cnt++;
 
-	DUMP_BUFFER("Write: ", urb->transfer_buffer_length,
-							urb->transfer_buffer);
 	result = usb_submit_urb(urb, GFP_KERNEL);
 	if (result < 0) {
 		/* under normal operation, this result couldn't be happen */
