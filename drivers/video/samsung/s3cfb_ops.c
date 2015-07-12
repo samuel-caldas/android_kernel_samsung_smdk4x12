@@ -101,11 +101,11 @@ struct s3c_platform_fb *to_fb_plat(struct device *dev)
 	return (struct s3c_platform_fb *)pdev->dev.platform_data;
 }
 
-#ifndef CONFIG_FRAMEBUFFER_CONSOLE
 static unsigned int bootloaderfb;
 module_param_named(bootloaderfb, bootloaderfb, uint, 0444);
 MODULE_PARM_DESC(bootloaderfb, "Address of booting logo image in Bootloader");
 
+#ifndef CONFIG_FRAMEBUFFER_CONSOLE
 int s3cfb_draw_logo(struct fb_info *fb)
 {
 #ifdef CONFIG_FB_S5P_SPLASH_SCREEN
