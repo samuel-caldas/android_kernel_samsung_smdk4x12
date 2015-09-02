@@ -212,4 +212,8 @@
 
 #define WRITE_WLANINFO
 
+#ifdef CONFIG_MACH_TAB3
+#define RDWR_MACADDR
+#endif
+
 #endif /* _dhd_sec_feature_h_ */
