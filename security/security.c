@@ -361,8 +361,8 @@ void security_inode_free(struct inode *inode)
 }
 
 int security_inode_init_security(struct inode *inode, struct inode *dir,
-				     const struct qstr *qstr, char **name,
-				     void **value, size_t *len)
+				 const struct qstr *qstr, char **name,
+				 void **value, size_t *len)
 {
 	if (unlikely(IS_PRIVATE(inode)))
 		return -EOPNOTSUPP;
@@ -679,10 +679,8 @@ int security_file_permission(struct file *file, int mask)
 
 	return fsnotify_perm(file, mask);
 }
-
-#if defined(CONFIG_VMWARE_MVP)
 EXPORT_SYMBOL_GPL(security_file_permission);
-#endif
+
 int security_file_alloc(struct file *file)
 {
 	return security_ops->file_alloc_security(file);
@@ -1003,6 +1001,12 @@ int security_netlink_send(struct sock *sk, struct sk_buff *skb)
 {
 	return security_ops->netlink_send(sk, skb);
 }
+
+int security_netlink_recv(struct sk_buff *skb, int cap)
+{
+	return security_ops->netlink_recv(skb, cap);
+}
+EXPORT_SYMBOL(security_netlink_recv);
 
 int security_secid_to_secctx(u32 secid, char **secdata, u32 *seclen)
 {
