@@ -1313,7 +1313,6 @@ struct gpio_keys_button tab3_buttons[] = {
 		  1, 1, sec_debug_check_crash_key),
 	GPIO_KEYS(KEY_HOMEPAGE, GPIO_OK_KEY,
 		  1, 1, sec_debug_check_crash_key),
-#ifndef CONFIG_SENSORS_HALL
    	{
 		.code = SW_FLIP,
 		.gpio = GPIO_HALL_INT_N,
@@ -1324,15 +1323,11 @@ struct gpio_keys_button tab3_buttons[] = {
 		.value = 1,
 		.isr_hook = sec_debug_check_crash_key,
 	},
-#endif
 };
 
 struct gpio_keys_platform_data tab3_gpiokeys_platform_data = {
 	tab3_buttons,
 	ARRAY_SIZE(tab3_buttons),
-#ifdef CONFIG_SENSORS_HALL
-	.gpio_flip_cover = GPIO_HALL_INT_N,
-#endif
 };
 
 static struct platform_device tab3_keypad = {
