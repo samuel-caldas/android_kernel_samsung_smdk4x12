@@ -840,7 +840,7 @@ static void flip_cover_work(struct work_struct *work)
 		__func__, ddata->flip_cover);
 
 	input_report_switch(ddata->input,
-		SW_LID, !ddata->flip_cover);
+		SW_FLIP, ddata->flip_cover);
 	input_sync(ddata->input);
 }
 
@@ -993,7 +993,7 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 	input->dev.parent = &pdev->dev;
 #ifdef CONFIG_SENSORS_HALL
 	input->evbit[0] |= BIT_MASK(EV_SW);
-	input_set_capability(input, EV_SW, SW_LID);
+	input_set_capability(input, EV_SW, SW_FLIP);
 #endif
 #ifdef CONFIG_MACH_GC1
 	input->evbit[0] |= BIT_MASK(EV_SW);
