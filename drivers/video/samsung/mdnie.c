@@ -695,7 +695,7 @@ static ssize_t tuning_show(struct device *dev,
 	pos += sprintf(pos, "++ %s: %s\n", __func__, mdnie->path);
 
 	if (!mdnie->tuning) {
-		pos += sprintf(pos, "tunning mode is off\n");
+		pos += sprintf(pos, "tuning mode is off\n");
 		goto exit;
 	}
 
@@ -859,7 +859,7 @@ static ssize_t store_##name (struct device *dev, \
 \
 	mdnie->name = value; \
 \
-	set_mdnie_value(mdnie, 0); \
+	mdnie_update(mdnie); \
 \
 	return size; \
 }
@@ -884,7 +884,7 @@ static ssize_t store_rgb_adj_enable(struct device *dev,
 	ret = strict_strtoul(buf, 0, (unsigned long *)&value);
 
 	mdnie->rgb_adj_enable = (value != 0);
-	set_mdnie_value(mdnie, 0);
+	mdnie_update(mdnie);
 	return size;
 }
 #endif
@@ -922,8 +922,7 @@ static struct device_attribute mdnie_attributes[] = {
 #if !defined(CONFIG_FB_MDNIE_PWM)
 	__ATTR(color_correct, 0444, color_correct_show, NULL),
 #endif
-	__ATTR(tunning, 0664, tunning_show, tunning_store),
-	__ATTR(negative, 0664, negative_show, negative_store),
+	__ATTR(tuning, 0664, tuning_show, tuning_store),
 #ifdef CONFIG_FB_MDNIE_RGB_ADJUST
 	__ATTR(r_adj, 0666, show_r_adj, store_r_adj),
 	__ATTR(g_adj, 0666, show_g_adj, store_g_adj),
