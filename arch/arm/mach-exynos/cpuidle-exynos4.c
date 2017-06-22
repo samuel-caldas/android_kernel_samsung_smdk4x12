@@ -15,6 +15,7 @@
 #include <linux/suspend.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
+#include <linux/cpufreq.h>
 
 #include <asm/proc-fns.h>
 #include <asm/tlbflush.h>
@@ -85,6 +86,9 @@ struct check_device_op {
 	struct platform_device	*pdev;
 	enum hc_type		type;
 };
+
+static bool include_onlining_cpus = false;
+static DEFINE_SPINLOCK(onlining_lock);
 
 #ifdef CONFIG_MACH_MIDAS
 unsigned int log_en = 0;
@@ -550,6 +554,49 @@ static struct sleep_save exynos4210_set_clksrc[] = {
 	{ .reg = EXYNOS4_CLKSRC_MASK_LCD1		, .val = 0x00001111, },
 };
 
+
+static DEFINE_SPINLOCK(online_lock);
+static int n_onlining_cpus_impl;
+
+static void add_onlininig_cpu(void)
+{
+	spin_lock(&online_lock);
+	++n_onlining_cpus_impl;
+	spin_unlock(&online_lock);
+}
+
+static void remove_onlininig_cpu(void)
+{
+	spin_lock(&online_lock);
+	--n_onlining_cpus_impl;
+	spin_unlock(&online_lock);
+}
+
+static void init_onlining_cpus(void)
+{
+	spin_lock(&online_lock);
+	n_onlining_cpus_impl = num_online_cpus();
+	spin_unlock(&online_lock);
+}
+
+static int is_only_onlining_cpu(void)
+{
+	int result;
+
+	spin_lock(&onlining_lock);
+	if (!include_onlining_cpus) {
+		spin_unlock(&onlining_lock);
+		result = (cpu_online(1) == 0);
+		return result;
+	}
+	spin_unlock(&onlining_lock);
+
+	spin_lock(&online_lock);
+	result = n_onlining_cpus_impl == 1;
+	spin_unlock(&online_lock);
+	return result;
+}
+
 static int exynos4_check_enter(void)
 {
 	unsigned int ret;
@@ -1003,6 +1050,67 @@ static struct notifier_block exynos4_cpuidle_notifier = {
 	.notifier_call = exynos4_cpuidle_notifier_event,
 };
 
+static int exynos4_cpuidle_cpu_notifier_event(struct notifier_block *this,
+					      unsigned long event,
+					      void *hcpu)
+{
+	switch (event) {
+	case CPU_UP_PREPARE:
+	case CPU_UP_PREPARE_FROZEN:
+		add_onlininig_cpu();
+		break;
+
+	case CPU_UP_CANCELED:
+	case CPU_UP_CANCELED_FROZEN:
+	case CPU_DEAD:
+	case CPU_DEAD_FROZEN:
+		remove_onlininig_cpu();
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block exynos4_cpuidle_cpu_notifier = {
+	.notifier_call = exynos4_cpuidle_cpu_notifier_event,
+};
+
+static int exynos4_cpuidle_cpufreq_policy_notifier_event(struct notifier_block *this,
+				unsigned long code, void *data)
+{
+	struct cpufreq_policy *policy = data;
+	switch (code) {
+	case CPUFREQ_ADJUST:
+		if (!strnicmp(policy->governor->name, "ondemand", CPUFREQ_NAME_LEN)) {
+			if (!include_onlining_cpus) {
+				spin_lock(&onlining_lock);
+				include_onlining_cpus = true;
+				spin_unlock(&onlining_lock);
+				printk(KERN_INFO "Include onlining cpu's for SW_CLK_DWN. Current governor: %s\n",
+					policy->governor->name);
+			}
+		} else {
+			if (include_onlining_cpus) {
+				spin_lock(&onlining_lock);
+				include_onlining_cpus = false;
+				spin_unlock(&onlining_lock);
+				printk(KERN_INFO "Exclude onlining cpu's for SW_CLK_DWN. Current governor: %s\n",
+					policy->governor->name);
+			}
+		}
+		break;
+	case CPUFREQ_INCOMPATIBLE:
+	case CPUFREQ_NOTIFY:
+	default:
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+static struct notifier_block exynos4_cpuidle_cpufreq_policy_notifier = {
+	.notifier_call = exynos4_cpuidle_cpufreq_policy_notifier_event,
+};
+
 #ifdef CONFIG_EXYNOS4_ENABLE_CLOCK_DOWN
 static void __init exynos4_core_down_clk(void)
 {
@@ -1176,6 +1284,17 @@ static int __init exynos4_init_cpuidle(void)
 	}
 #endif
 	register_pm_notifier(&exynos4_cpuidle_notifier);
+
+	if (use_clock_down == SW_CLK_DWN) {
+		get_online_cpus();
+		init_onlining_cpus();
+		register_cpu_notifier(&exynos4_cpuidle_cpu_notifier);
+		cpufreq_register_notifier(&exynos4_cpuidle_cpufreq_policy_notifier,
+						CPUFREQ_POLICY_NOTIFIER);
+
+		put_online_cpus();
+	}
+
 	sys_pwr_conf_addr = (unsigned long)S5P_CENTRAL_SEQ_CONFIGURATION;
 
 	/* Save register value for SCU */
