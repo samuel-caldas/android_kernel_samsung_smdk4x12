@@ -26,7 +26,11 @@ struct usb_ep;
  * @dma: DMA address corresponding to 'buf'.  If you don't set this
  *	field, and the usb controller needs one, it is responsible
  *	for mapping and unmapping the buffer.
+ * @sg: a scatterlist for SG-capable controllers.
+ * @num_sgs: number of SG entries
+ * @num_mapped_sgs: number of SG entries mapped to DMA (internal)
  * @length: Length of that data
+ * @stream_id: The stream id, when USB3.0 bulk streams are being used
  * @no_interrupt: If true, hints that no completion irq is needed.
  *	Helpful sometimes with deep request queues that are handled
  *	directly by DMA controllers.
@@ -81,6 +85,11 @@ struct usb_request {
 	unsigned		length;
 	dma_addr_t		dma;
 
+	struct scatterlist	*sg;
+	unsigned		num_sgs;
+	unsigned		num_mapped_sgs;
+
+	unsigned		stream_id:16;
 	unsigned		no_interrupt:1;
 	unsigned		zero:1;
 	unsigned		short_not_ok:1;
@@ -146,9 +155,12 @@ struct usb_ep {
 	const struct usb_ep_ops	*ops;
 	struct list_head	ep_list;
 	unsigned		maxpacket:16;
-
-	unsigned		numstreams:5;
-	unsigned		maxburst:4;
+	unsigned		max_streams:16;
+	unsigned		mult:2;
+	unsigned		maxburst:5;
+	u8			address;
+	const struct usb_endpoint_descriptor	*desc;
+	const struct usb_ss_ep_comp_descriptor	*comp_desc;
 };
 
 /*-------------------------------------------------------------------------*/
@@ -883,6 +895,11 @@ struct usb_gadget_strings {
 	struct usb_string	*strings;
 };
 
+struct usb_gadget_string_container {
+	struct list_head        list;
+	u8                      *stash[0];
+};
+
 /* put descriptor for string with that id into buf (buflen >= 256) */
 int usb_gadget_get_string(struct usb_gadget_strings *table, int id, u8 *buf);
 
@@ -916,6 +933,13 @@ static inline void usb_free_descriptors(struct usb_descriptor_header **v)
 {
 	kfree(v);
 }
+
+struct usb_function;
+int usb_assign_descriptors(struct usb_function *f,
+		struct usb_descriptor_header **fs,
+		struct usb_descriptor_header **hs,
+		struct usb_descriptor_header **ss);
+void usb_free_all_descriptors(struct usb_function *f);
 
 /*-------------------------------------------------------------------------*/
 

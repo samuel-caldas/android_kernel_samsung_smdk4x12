@@ -322,7 +322,7 @@ static int f_midi_start_ep(struct f_midi *midi,
 		return err;
 	}
 
-	err = usb_ep_enable(ep);
+	err = usb_ep_enable(ep, ep->desc);
 	if (err) {
 		ERROR(cdev, "can't start %s: %d\n", ep->name, err);
 		return err;
@@ -358,7 +358,7 @@ static int f_midi_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		return err;
 	}
 
-	err = usb_ep_enable(midi->out_ep);
+	err = usb_ep_enable(midi->out_ep, midi->out_ep->desc);
 	if (err) {
 		ERROR(cdev, "can't start %s: %d\n",
 		      midi->out_ep->name, err);
@@ -886,8 +886,8 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 	 * both speeds
 	 */
 	/* copy descriptors, and track endpoint copies */
-	f->fs_descriptors = usb_copy_descriptors(midi_function);
-	if (!f->fs_descriptors)
+	f->descriptors = usb_copy_descriptors(midi_function);
+	if (!f->descriptors)
 		goto fail_f_midi;
 
 	if (gadget_is_dualspeed(c->cdev->gadget)) {

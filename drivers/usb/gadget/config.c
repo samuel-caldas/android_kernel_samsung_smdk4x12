@@ -115,6 +115,7 @@ int usb_gadget_config_buf(
 	cp->bmAttributes |= USB_CONFIG_ATT_ONE;
 	return len;
 }
+EXPORT_SYMBOL_GPL(usb_gadget_config_buf);
 
 /**
  * usb_copy_descriptors - copy a vector of USB descriptors
@@ -164,6 +165,7 @@ usb_copy_descriptors(struct usb_descriptor_header **src)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(usb_copy_descriptors);
 
 /**
  * usb_find_endpoint - find a copy of an endpoint descriptor
@@ -190,3 +192,11 @@ usb_find_endpoint(
 	}
 	return NULL;
 }
+
+void usb_free_all_descriptors(struct usb_function *f)
+{
+	usb_free_descriptors(f->descriptors);
+	usb_free_descriptors(f->hs_descriptors);
+	usb_free_descriptors(f->ss_descriptors);
+}
+EXPORT_SYMBOL_GPL(usb_free_all_descriptors);
